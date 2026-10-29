@@ -7,7 +7,39 @@ import os
 import sys
 import re
 import base64
-from bs4 import BeautifulSoup
+from html.parser import HTMLParser
+
+class BalanceParser(HTMLParser):
+    """用标准库解析 <div class="balance-info"> 内的 <div class="fs-2"> 文本，避免依赖 bs4"""
+    def __init__(self):
+        super().__init__()
+        self._stack = []          # div class 列表栈，用于正确处理嵌套
+        self._in_balance = False
+        self._in_fs2 = False
+        self.balance_text = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag != 'div':
+            return
+        classes = dict(attrs).get('class', '').split()
+        self._stack.append(classes)
+        if 'balance-info' in classes:
+            self._in_balance = True
+        if self._in_balance and 'fs-2' in classes:
+            self._in_fs2 = True
+
+    def handle_data(self, data):
+        if self._in_fs2 and self.balance_text is None:
+            self.balance_text = data.strip()
+
+    def handle_endtag(self, tag):
+        if tag == 'div' and self._stack:
+            classes = self._stack.pop()
+            if 'fs-2' in classes:
+                self._in_fs2 = False
+            if 'balance-info' in classes:
+                self._in_balance = False
+
 
 # 站点配置
 SITES = {
@@ -48,10 +80,44 @@ def get_env(env_name):
     return value
 
 # 青龙通知模块
+def _pushplus_send(token, title, message):
+    """通过 PushPlus 官方接口直接推送，不依赖 QLAPI。成功返回 True，失败返回 False。"""
+    url = "https://www.pushplus.plus/send"
+    payload = {
+        "token": token,
+        "title": title,
+        "content": message,
+        "template": "txt",
+    }
+    # 一对多群组推送（可选）
+    topic = os.environ.get("PUSH_PLUS_USER") or os.environ.get("pushPlusUser")
+    if topic:
+        payload["topic"] = topic
+    try:
+        resp = requests.post(url, json=payload, timeout=15)
+        data = resp.json()
+    except Exception as e:
+        print(f"❌ PushPlus 请求异常: {e}")
+        return False
+    if data.get("code") == 200:
+        print("✅ PushPlus 通知发送成功")
+        return True
+    print(f"❌ PushPlus 返回错误: {data}")
+    return False
+
+
 def ql_send(title, message):
     """
-    青龙面板通知函数
+    青龙面板通知函数。
+    优先使用 PushPlus 直推（从环境变量 PUSH_PLUS_TOKEN 读取 token），
+    这是面板「通知设置」之外独立可靠的一条通道；
+    若未配置 token，则回退到 QLAPI.notify（面板通知设置）。
     """
+    token = os.environ.get("PUSH_PLUS_TOKEN") or os.environ.get("pushPlusToken")
+    if token:
+        if _pushplus_send(token, title, message):
+            return
+        print("⚠️ PushPlus 直推失败，尝试 QLAPI 兜底…")
     try:
         QLAPI.notify(title, message)
     except Exception as e:
@@ -512,24 +578,15 @@ def get_user_balance(cookie):
         response.encoding = 'utf-8'
         html = response.text
         
-        # 使用 BeautifulSoup 解析 HTML
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # 查找 class="balance-info" 的 div
-        balance_info = soup.find('div', class_='balance-info')
-        if not balance_info:
-            print("❌ 未找到 balance-info 元素")
+        # 使用标准库 html.parser 解析 HTML（无需第三方依赖，cron/手动环境一致）
+        parser = BalanceParser()
+        parser.feed(html)
+
+        text = parser.balance_text
+        if not text:
+            print("❌ 未找到 balance-info > fs-2 元素")
             return None
-        
-        # 在 balance-info 中查找 class="fs-2" 的 div
-        fs2_div = balance_info.find('div', class_='fs-2')
-        if not fs2_div:
-            print("❌ 未找到 fs-2 元素")
-            return None
-        
-        # 获取文本内容，去除空白字符
-        text = fs2_div.get_text(strip=True)
-        
+
         # 从文本中提取数字部分（如 "7.5积分" -> "7.5"）
         match = re.search(r'([\d.]+)', text)
         if match:
