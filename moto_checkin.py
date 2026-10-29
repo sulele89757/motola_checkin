@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# 摩托啦签到
+# 0 8 * * *
 
 import requests
 import json
