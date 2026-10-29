@@ -13,7 +13,7 @@ import base64
 from html.parser import HTMLParser
 
 class BalanceParser(HTMLParser):
-    """用标准库解析 <div class="balance-info"> 内的 <div class="fs-2"> 文本，避免依赖 bs4"""
+    # 用标准库解析 <div class=balance-info> 内的 <div class=fs-2> 文本，避免依赖 bs4
     def __init__(self):
         super().__init__()
         self._stack = []          # div class 列表栈，用于正确处理嵌套
@@ -68,7 +68,7 @@ SITES = {
 current_site = None
 
 def get_site_config(site_key):
-    """获取站点配置"""
+    # 获取站点配置
     global current_site
     if site_key not in SITES:
         raise ValueError(f"未知的站点: {site_key}, 可用站点: {list(SITES.keys())}")
@@ -76,7 +76,7 @@ def get_site_config(site_key):
     return current_site
 
 def get_env(env_name):
-    """获取环境变量"""
+    # 获取环境变量
     value = os.getenv(env_name)
     if not value:
         raise ValueError(f"未设置环境变量 {env_name}")
@@ -84,21 +84,17 @@ def get_env(env_name):
 
 # 青龙通知模块
 def ql_send(title, message):
-    """
-    青龙面板通知函数
-    """
+    # 青龙面板通知函数
     try:
         QLAPI.notify(title, message)
     except Exception as e:
         print(f"通知发送失败: {e}")
 
 def get_nonce(cookie):
-    """
-    从网站首页提取 nonce 值
-    """
+    # 从网站首页提取 nonce 值
     if not current_site:
         raise Exception("未设置站点配置")
-    
+
     url = f"https://{current_site['domain']}/"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
@@ -116,7 +112,7 @@ def get_nonce(cookie):
         html = resp.text
         print(f"[Nonce] 页面长度: {len(html)}")
 
-        # 模式1: 直接匹配 "ajax_nonce":"xxxxx"
+        # 模式1: 直接匹配 ajax_nonce:xxxxx
         match = re.search(r'["\']ajax_nonce["\']\s*:\s*["\']([^"\']+)["\']', html)
         if match:
             nonce = match.group(1)
@@ -162,12 +158,10 @@ def get_nonce(cookie):
         return None
 
 def get_captcha_img(cookie, nonce):
-    """
-    获取验证码图片，返回(图片base64, 新增的cookie)
-    """
+    # 获取验证码图片，返回(图片base64, 新增的cookie)
     if not current_site:
         raise Exception("未设置站点配置")
-    
+
     url = f"https://{current_site['domain']}/wp-admin/admin-ajax.php"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
@@ -189,7 +183,7 @@ def get_captcha_img(cookie, nonce):
         response = requests.post(url, headers=headers, data=data, timeout=30)
         print(f"[验证码] 响应状态码: {response.status_code}")
         print(f"[验证码] 响应内容: {response.text[:200]}")
-        
+
         # 从响应头中获取新设置的cookie
         set_cookie = response.headers.get('Set-Cookie', '')
         new_cookie = ''
@@ -200,11 +194,11 @@ def get_captcha_img(cookie, nonce):
                     new_cookie = item.split(';')[0].strip()
                     print(f"[验证码] 新增Cookie: {new_cookie}")
                     break
-        
+
         resp_json = response.json()
         if resp_json.get('status') == 1:
             img_data = resp_json.get('msg', '')
-            # 清理 "data:image/jpeg;base64," 前缀
+            # 清理 data:image/jpeg;base64, 前缀
             if 'base64,' in img_data:
                 img_data = img_data.split('base64,')[1]
             print(f"✅ 获取验证码成功")
@@ -217,12 +211,10 @@ def get_captcha_img(cookie, nonce):
         return None, None
 
 def recognize_captcha(base64_img):
-    """
-    使用ddddocr识别验证码
-    """
+    # 使用ddddocr识别验证码
     if not current_site:
         raise Exception("未设置站点配置")
-    
+
     url = current_site.get('ddddocr_url', 'http://localhost:8181/ocr')
     data = {
         "file": "",
@@ -250,18 +242,16 @@ def recognize_captcha(base64_img):
         return None
 
 def do_login(cookie, nonce, captcha_code):
-    """
-    执行登录操作
-    """
+    # 执行登录操作
     if not current_site:
         raise Exception("未设置站点配置")
-    
+
     url = f"https://{current_site['domain']}/wp-admin/admin-ajax.php"
-    
+
     # 从当前站点配置获取用户名和密码
     user_name = get_env(current_site['user_env'])
     user_password = get_env(current_site['pass_env'])
-    
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
         "Cookie": cookie,
@@ -272,7 +262,7 @@ def do_login(cookie, nonce, captcha_code):
         "X-Requested-With": "XMLHttpRequest",
         "Referer": f"https://{current_site['domain']}/"
     }
-    
+
     data = {
         "nonce": nonce,
         "user_name": user_name,
@@ -281,13 +271,13 @@ def do_login(cookie, nonce, captcha_code):
         "remember": "on",
         "action": "zb_user_login"
     }
-    
+
     print(f"[登录] 请求URL: {url}")
     print(f"[登录] nonce: {nonce}")
     print(f"[登录] user_name: {user_name}")
     print(f"[登录] captcha_code: {captcha_code}")
     print(f"[登录] 请求Headers: {headers}")
-    
+
     try:
         response = requests.post(url, headers=headers, data=data, timeout=30)
         print(f"[登录] 响应状态码: {response.status_code}")
@@ -295,11 +285,11 @@ def do_login(cookie, nonce, captcha_code):
         print(f"[登录] 响应内容: {response.text[:300]}")
         resp_json = response.json()
         print(f"登录响应: {resp_json}")
-        
+
         # 获取登录后的Cookie
         cookie_jar = response.cookies
         login_cookie = "; ".join([f"{c.name}={c.value}" for c in cookie_jar])
-        
+
         # 从响应头中获取Set-Cookie
         set_cookie = response.headers.get('Set-Cookie', '')
         if set_cookie:
@@ -311,7 +301,7 @@ def do_login(cookie, nonce, captcha_code):
                     cookie_part = parts[0].strip()
                     cookies.append(cookie_part)
             login_cookie = "; ".join(cookies)
-        
+
         if resp_json.get('status') == 1:
             print(f"✅ 登录成功")
             return login_cookie, "登录成功"
@@ -323,15 +313,13 @@ def do_login(cookie, nonce, captcha_code):
         print(f"登录出错: {e}")
         return None, str(e)
 
-# def do_login_with_cookie(cookie, max_captcha_retries=10):
-    """
-    尝试登录并返回新的cookie（包含从首页获取的nonce）
-    当验证码识别错误时，自动重试整个流程
-    """
+    # def do_login_with_cookie(cookie, max_captcha_retries=10):
+    #     尝试登录并返回新的cookie（包含从首页获取的nonce）
+    #     当验证码识别错误时，自动重试整个流程
     print("=" * 50)
     print("开始重新登录流程...")
     print("=" * 50)
-    
+
     for captcha_retry in range(max_captcha_retries):
         # 先获取nonce
         print("[登录流程] Step 1: 获取Nonce")
@@ -340,7 +328,7 @@ def do_login(cookie, nonce, captcha_code):
             print("[登录流程] ❌ 获取Nonce失败")
             return None
         print(f"[登录流程] ✅ 获取Nonce成功: {nonce[:20]}...")
-        
+
         # 获取验证码（同时获取新增的cookie）
         print("[登录流程] Step 2: 获取验证码图片")
         captcha_base64, captcha_cookie = get_captcha_img(cookie, nonce)
@@ -348,7 +336,7 @@ def do_login(cookie, nonce, captcha_code):
             print("[登录流程] ❌ 获取验证码失败")
             return None
         print(f"[登录流程] ✅ 获取验证码成功, Base64长度: {len(captcha_base64)}")
-        
+
         # 合并cookie，添加 _zb_img_captcha_code
         if captcha_cookie:
             full_cookie = f"{cookie}; {captcha_cookie}"
@@ -356,7 +344,7 @@ def do_login(cookie, nonce, captcha_code):
         else:
             full_cookie = cookie
             print(f"[登录流程] 未获取到新增Cookie，使用原Cookie")
-        
+
         # 识别验证码
         print("[登录流程] Step 3: 识别验证码")
         captcha_code = recognize_captcha(captcha_base64)
@@ -364,17 +352,17 @@ def do_login(cookie, nonce, captcha_code):
             print("[登录流程] ❌ 识别验证码失败")
             return None
         print(f"[登录流程] ✅ 识别成功, 验证码: {captcha_code}")
-        
+
         # 执行登录（使用合并后的cookie）
         print("[登录流程] Step 4: 执行登录")
         new_cookie, login_msg = do_login(full_cookie, nonce, captcha_code)
-        
+
         if new_cookie:
             print(f"[登录流程] ✅ 登录成功, 新Cookie: {new_cookie[:50]}...")
             return new_cookie
         else:
             print(f"[登录流程] ❌ 登录失败: {login_msg}")
-            
+
             # 检查是否是验证码错误，如果是则重试
             if '验证码错误' in str(login_msg):
                 print(f"[登录流程] ⚠️ 验证码识别错误，第 {captcha_retry + 1}/{max_captcha_retries} 次重试...")
@@ -382,19 +370,17 @@ def do_login(cookie, nonce, captcha_code):
             else:
                 # 其他错误，直接返回
                 return None
-    
+
     print("[登录流程] ❌ 验证码识别重试次数耗尽")
     return None
 
 def do_login_with_cookie(cookie, max_captcha_retries=10):
-    """
-    尝试登录并返回新的cookie（包含从首页获取的nonce）
-    当验证码识别错误时，自动重试整个流程
-    """
+    # 尝试登录并返回新的cookie（包含从首页获取的nonce）
+    # 当验证码识别错误时，自动重试整个流程
     print("=" * 50)
     print("开始重新登录流程...")
     print("=" * 50)
-    
+
     for captcha_retry in range(max_captcha_retries):
         # 先获取nonce
         print("[登录流程] Step 1: 获取Nonce")
@@ -403,7 +389,7 @@ def do_login_with_cookie(cookie, max_captcha_retries=10):
             print("[登录流程] ❌ 获取Nonce失败")
             return None
         print(f"[登录流程] ✅ 获取Nonce成功: {nonce[:20]}...")
-        
+
         # 获取验证码（同时获取新增的cookie）
         print("[登录流程] Step 2: 获取验证码图片")
         captcha_base64, captcha_cookie = get_captcha_img(cookie, nonce)
@@ -411,7 +397,7 @@ def do_login_with_cookie(cookie, max_captcha_retries=10):
             print("[登录流程] ❌ 获取验证码失败")
             return None
         print(f"[登录流程] ✅ 获取验证码成功, Base64长度: {len(captcha_base64)}")
-        
+
         # 合并cookie，添加 _zb_img_captcha_code
         if captcha_cookie:
             full_cookie = f"{cookie}; {captcha_cookie}"
@@ -419,7 +405,7 @@ def do_login_with_cookie(cookie, max_captcha_retries=10):
         else:
             full_cookie = cookie
             print(f"[登录流程] 未获取到新增Cookie，使用原Cookie")
-        
+
         # 识别验证码
         print("[登录流程] Step 3: 识别验证码")
         captcha_code = recognize_captcha(captcha_base64)
@@ -427,22 +413,22 @@ def do_login_with_cookie(cookie, max_captcha_retries=10):
             print("[登录流程] ❌ 识别验证码失败")
             return None
         print(f"[登录流程] ✅ 识别成功, 验证码: {captcha_code}")
-        
+
         # 执行登录（使用合并后的cookie）
         print("[登录流程] Step 4: 执行登录")
         new_cookie, login_msg = do_login(full_cookie, nonce, captcha_code)
-        
+
         if new_cookie:
             print(f"[登录流程] ✅ 登录成功, 新Cookie: {new_cookie[:50]}...")
-            
+
             # 清理cookie中的无效字段
             cleaned_cookie = clean_invalid_cookies(new_cookie)
             print(f"[登录流程] 清理后的Cookie: {cleaned_cookie[:50]}...")
-            
+
             return cleaned_cookie
         else:
             print(f"[登录流程] ❌ 登录失败: {login_msg}")
-            
+
             # 检查是否是验证码错误，如果是则重试
             if '验证码错误' in str(login_msg):
                 print(f"[登录流程] ⚠️ 验证码识别错误，第 {captcha_retry + 1}/{max_captcha_retries} 次重试...")
@@ -450,21 +436,19 @@ def do_login_with_cookie(cookie, max_captcha_retries=10):
             else:
                 # 其他错误，直接返回
                 return None
-    
+
     print("[登录流程] ❌ 验证码识别重试次数耗尽")
     return None
 
 def clean_invalid_cookies(cookie_str):
-    """
-    清理cookie中的无效字段
-    删除 _zb_img_captcha_code=deleted 和时间戳字段
-    """
+    # 清理cookie中的无效字段
+    # 删除 _zb_img_captcha_code=deleted 和时间戳字段
     if not cookie_str:
         return cookie_str
-    
+
     # 将cookie按分号分割
     cookies = [c.strip() for c in cookie_str.split(';') if c.strip()]
-    
+
     # 过滤掉无效的cookie项
     cleaned_cookies = []
     for cookie_item in cookies:
@@ -472,35 +456,33 @@ def clean_invalid_cookies(cookie_str):
         if '_zb_img_captcha_code=deleted' in cookie_item:
             print(f"[清理Cookie] 移除无效项: {cookie_item}")
             continue
-        
+
         # 跳过日期格式的时间戳（如: 01-Jan-1970 00:00:01 GMT）
         if re.match(r'\d{2}-[A-Z][a-z]{2}-\d{4}\s+\d{2}:\d{2}:\d{2}\s+GMT', cookie_item):
             print(f"[清理Cookie] 移除时间戳: {cookie_item}")
             continue
-        
+
         cleaned_cookies.append(cookie_item)
-    
+
     # 重新组合cookie字符串
     cleaned_cookie = '; '.join(cleaned_cookies)
     print(f"[清理Cookie] 原始长度: {len(cookie_str)}, 清理后长度: {len(cleaned_cookie)}")
-    
+
     return cleaned_cookie
 
 def set_env_variable(name, value):
-    """
-    设置青龙面板环境变量
-    """
+    # 设置青龙面板环境变量
     try:
         # 先获取现有的环境变量信息
         env_list = QLAPI.getEnvs({"searchValue": name})
         target_env = None
-        
+
         if env_list and env_list.get('data'):
             for env in env_list['data']:
                 if env.get('name') == name:
                     target_env = env
                     break
-        
+
         if target_env:
             # 补全所有字段后更新
             result = QLAPI.updateEnv({
@@ -526,12 +508,10 @@ def set_env_variable(name, value):
         print(f"请手动更新环境变量，新Cookie: {value[:50]}...")
 
 def get_user_balance(cookie):
-    """
-    访问用户积分页面，解析并返回当前积分余额
-    """
+    # 访问用户积分页面，解析并返回当前积分余额
     if not current_site:
         raise Exception("未设置站点配置")
-    
+
     url = f"https://{current_site['domain']}/user/coin/"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
@@ -539,14 +519,14 @@ def get_user_balance(cookie):
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Connection": "keep-alive"
     }
-    
+
     print(f"[积分查询] 请求URL: {url}")
     try:
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
         response.encoding = 'utf-8'
         html = response.text
-        
+
         # 使用标准库 html.parser 解析 HTML（无需第三方依赖，cron/手动环境一致）
         parser = BalanceParser()
         parser.feed(html)
@@ -556,7 +536,7 @@ def get_user_balance(cookie):
             print("❌ 未找到 balance-info > fs-2 元素")
             return None
 
-        # 从文本中提取数字部分（如 "7.5积分" -> "7.5"）
+        # 从文本中提取数字部分（如 7.5积分 -> 7.5）
         match = re.search(r'([\d.]+)', text)
         if match:
             balance = match.group(1)
@@ -565,19 +545,17 @@ def get_user_balance(cookie):
         else:
             print(f"❌ 无法从文本中提取积分数值: {text}")
             return None
-            
+
     except Exception as e:
         print(f"获取积分余额出错: {e}")
         return None
 
 def do_checkin_with_retry(cookie, retry_count=2):
-    """
-    执行签到，带重试逻辑
-    返回: (是否成功, 消息, 新cookie, 积分余额)
-    """
+    # 执行签到，带重试逻辑
+    # 返回: (是否成功, 消息, 新cookie, 积分余额)
     if not current_site:
         raise Exception("未设置站点配置")
-    
+
     url = f"https://{current_site['domain']}/wp-admin/admin-ajax.php"
     current_site_name = current_site['name']
 
@@ -586,7 +564,7 @@ def do_checkin_with_retry(cookie, retry_count=2):
         nonce = get_nonce(cookie)
         if not nonce:
             return False, "❌ 无法获取 nonce，请检查 Cookie 是否有效", None, None
-        
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
             "Cookie": cookie,
@@ -595,40 +573,40 @@ def do_checkin_with_retry(cookie, retry_count=2):
             "Connection": "keep-alive",
             "Referer": f"https://{current_site['domain']}/"
         }
-        
+
         data = {
             "action": "zb_user_qiandao",
             "nonce": nonce
         }
-        
+
         try:
             response = requests.post(url, headers=headers, data=data, timeout=30)
-            
+
             # 检查响应状态
             if response.status_code != 200:
                 raise requests.exceptions.HTTPError(f"HTTP {response.status_code}: {response.text[:100]}")
-            
+
             # 尝试解析JSON
             try:
                 resp_json = response.json()
             except json.JSONDecodeError:
                 # JSON解析失败，可能是HTML错误页面
                 raise Exception(f"响应不是有效JSON: {response.text[:200]}")
-            
+
             # 检查resp_json是否是字典
             if not isinstance(resp_json, dict):
                 raise Exception(f"响应格式错误: {type(resp_json)}, 内容: {str(resp_json)[:100]}")
-            
+
             status = resp_json.get('status')
             msg = resp_json.get('message') or resp_json.get('msg') or ''
-            
+
             # 确保status是整数类型
             if isinstance(status, str):
                 try:
                     status = int(status)
                 except (ValueError, TypeError):
                     status = -1
-            
+
             if status == 1:
                 # 签到成功，获取积分余额
                 balance = get_user_balance(cookie)
@@ -661,7 +639,7 @@ def do_checkin_with_retry(cookie, retry_count=2):
                         return False, f"❌ 签到重试次数耗尽\n{msg}", None, None
                 else:
                     return False, f"⚠️ 【{current_site_name}】签到结果未知\n{msg}", None, None
-                    
+
         except requests.exceptions.HTTPError as e:
             # HTTP错误，如403、401等，可能cookie失效
             if attempt < retry_count:
@@ -675,7 +653,7 @@ def do_checkin_with_retry(cookie, retry_count=2):
                     return False, f"❌ HTTP错误，重新登录失败: {e}", None, None
             else:
                 return False, f"❌ HTTP错误，重试耗尽: {e}", None, None
-                
+
         except requests.exceptions.RequestException as e:
             # 其他网络错误
             if attempt < retry_count:
@@ -689,23 +667,21 @@ def do_checkin_with_retry(cookie, retry_count=2):
                     return False, f"❌ 网络请求错误，重新登录失败: {e}", None, None
             else:
                 return False, f"❌ 网络请求错误，重试耗尽: {e}", None, None
-                
+
         except Exception as e:
             return False, f"❌ 签到过程出错: {e}", None, None
-    
+
     return False, "❌ 签到重试次数耗尽", None, None
 
 def site_checkin(site_key):
-    """
-    通用站点签到函数
-    """
+    # 通用站点签到函数
     # 初始化站点配置
     site_config = get_site_config(site_key)
     site_name = site_config['name']
     cookie_env = site_config['cookie_env']
-    
+
     print(f"开始执行 {site_name} 签到任务...")
-    
+
     # 从环境变量读取 Cookie
     cookie = os.getenv(cookie_env)
     if not cookie:
@@ -713,22 +689,22 @@ def site_checkin(site_key):
         print(error_msg)
         ql_send(f"{site_name}签到错误", error_msg)
         return
-    
+
     print("开始执行签到...")
     success, message, new_cookie, balance = do_checkin_with_retry(cookie, retry_count=2)
-    
+
     # 如果获得新cookie，更新环境变量
     if new_cookie and new_cookie != cookie:
         print(f"✅ 获得新Cookie，更新环境变量...")
         set_env_variable(cookie_env, new_cookie)
-    
+
     ql_send(f"{site_name}签到通知" if success else f"{site_name}签到错误", message)
 
 if __name__ == "__main__":
     # 从命令行参数或环境变量获取站点名称
     # 用法: python script.py motola 或 python script.py wrqt
     site_key = sys.argv[1] if len(sys.argv) > 1 else os.getenv("SITE_KEY", "motola")
-    
+
     print(f"选择的站点: {site_key}")
     site_checkin(site_key)
     print("签到任务执行完成")
