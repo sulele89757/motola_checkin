@@ -1,6 +1,8 @@
-#!/usr/bin/env python3
-# 摩托啦签到
-# 0 8 * * *
+"""
+摩托啦签到
+
+cron: 0 8 * * *
+"""
 
 import requests
 import json
