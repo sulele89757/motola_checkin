@@ -80,44 +80,10 @@ def get_env(env_name):
     return value
 
 # 青龙通知模块
-def _pushplus_send(token, title, message):
-    """通过 PushPlus 官方接口直接推送，不依赖 QLAPI。成功返回 True，失败返回 False。"""
-    url = "https://www.pushplus.plus/send"
-    payload = {
-        "token": token,
-        "title": title,
-        "content": message,
-        "template": "txt",
-    }
-    # 一对多群组推送（可选）
-    topic = os.environ.get("PUSH_PLUS_USER") or os.environ.get("pushPlusUser")
-    if topic:
-        payload["topic"] = topic
-    try:
-        resp = requests.post(url, json=payload, timeout=15)
-        data = resp.json()
-    except Exception as e:
-        print(f"❌ PushPlus 请求异常: {e}")
-        return False
-    if data.get("code") == 200:
-        print("✅ PushPlus 通知发送成功")
-        return True
-    print(f"❌ PushPlus 返回错误: {data}")
-    return False
-
-
 def ql_send(title, message):
     """
-    青龙面板通知函数。
-    优先使用 PushPlus 直推（从环境变量 PUSH_PLUS_TOKEN 读取 token），
-    这是面板「通知设置」之外独立可靠的一条通道；
-    若未配置 token，则回退到 QLAPI.notify（面板通知设置）。
+    青龙面板通知函数
     """
-    token = os.environ.get("PUSH_PLUS_TOKEN") or os.environ.get("pushPlusToken")
-    if token:
-        if _pushplus_send(token, title, message):
-            return
-        print("⚠️ PushPlus 直推失败，尝试 QLAPI 兜底…")
     try:
         QLAPI.notify(title, message)
     except Exception as e:
